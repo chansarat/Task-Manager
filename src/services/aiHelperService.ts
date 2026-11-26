@@ -51,6 +51,11 @@ export async function requestAiHelp(
     };
 
     if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(
+          "AI Helper server route (/api/ai-helper) is unavailable on static hosting like GitHub Pages. All task features work locally; deploy with Node.js (server.ts) to enable AI Helper."
+        );
+      }
       throw new Error(
         data.error || `AI Helper returned status ${response.status}.`
       );
