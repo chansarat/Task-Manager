@@ -1,0 +1,6 @@
+{
+  "name": "TaskLedger",
+  "description": "A private, local-first task manager with classifications, 5-mode filtering, a multi-select Recycle Bin, and an on-demand AI Helper.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
