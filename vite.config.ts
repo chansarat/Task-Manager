@@ -42,3 +42,5 @@ export default defineConfig(() => {
     },
   };
 });
+
+base: process.env.GITHUB_ACTIONS === 'true' ? '/Task-Manager/' : '/',
