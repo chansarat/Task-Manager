@@ -1,3 +1,4 @@
+  base: process.env.GITHUB_ACTIONS === 'true' ? '/Task-Manager/' : '/',
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
@@ -43,4 +44,4 @@ export default defineConfig(() => {
   };
 });
 
-base: process.env.GITHUB_ACTIONS === 'true' ? '/Task-Manager/' : '/',
+
