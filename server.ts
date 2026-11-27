@@ -100,14 +100,42 @@ function sanitizeHistory(rawHistory: unknown): ChatHistoryItem[] {
   return sanitized;
 }
 
+function getAllowedOrigins(): Set<string> {
+  const raw = process.env.ALLOWED_ORIGINS || "";
+  return new Set(
+    raw
+      .split(",")
+      .map((origin) => origin.trim().replace(/\/+$/, ""))
+      .filter((origin) => /^https?:\/\/[^/\s]+$/i.test(origin))
+  );
+}
+
 /**
  * Boots the Express server, attaches API routes, and mounts either Vite's
  * development middleware or the production static build.
  */
 async function startServer(): Promise<void> {
   const app = express();
+  const allowedOrigins = getAllowedOrigins();
 
   app.use(express.json({ limit: "32kb" }));
+
+  app.use("/api", (req: Request, res: Response, next) => {
+    const requestOrigin = req.headers.origin;
+    if (typeof requestOrigin === "string" && allowedOrigins.has(requestOrigin)) {
+      res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    }
+
+    if (req.method === "OPTIONS") {
+      res.status(204).end();
+      return;
+    }
+
+    next();
+  });
 
   /**
    * POST /api/ai-helper
