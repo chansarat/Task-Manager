@@ -17,7 +17,16 @@ import {
   renderTaskList,
   updateClassificationPreview,
 } from "./renderers.js";
-import { loadWorkspaceState, saveWorkspaceState } from "./storage.js";
+import {
+  getCurrentAuthUser,
+  isCloudSyncConfigured,
+  loadWorkspaceState,
+  saveWorkspaceState,
+  signInWithEmail,
+  signOutAccount,
+  signUpWithEmail,
+  syncWorkspaceNow,
+} from "./storage.js";
 import {
   calculateTaskMetrics,
   filterTasks,
@@ -44,6 +53,8 @@ const uiState = {
   selectedNewColor: "teal",
   pendingConfirm: null,
   docsTab: "modules",
+  accountMode: "signin", // "signin" | "signup"
+  accountBusy: false,
   ai: {
     isOpen: false,
     showOfferPopover: false,
@@ -71,6 +82,7 @@ const dom = {
   navBinBtn: document.getElementById("nav-bin-btn"),
   navDocsBtn: document.getElementById("nav-docs-btn"),
   navPrivacyBtn: document.getElementById("nav-privacy-btn"),
+  navAccountBtn: document.getElementById("nav-account-btn"),
   headerAiBtn: document.getElementById("header-ai-btn"),
 
   // Workspace Header & Banner
@@ -144,6 +156,27 @@ const dom = {
   docsTabPrivacy: document.getElementById("docs-tab-privacy"),
   docsContentModules: document.getElementById("docs-content-modules"),
   docsContentPrivacy: document.getElementById("docs-content-privacy"),
+
+  // Account Modal
+  accountModal: document.getElementById("account-modal"),
+  closeAccountBtn: document.getElementById("close-account-btn"),
+  cancelAccountBtn: document.getElementById("cancel-account-btn"),
+  accountUnconfiguredNotice: document.getElementById("account-unconfigured-notice"),
+  accountError: document.getElementById("account-error"),
+  accountErrorText: document.getElementById("account-error-text"),
+  accountInfo: document.getElementById("account-info"),
+  accountInfoText: document.getElementById("account-info-text"),
+  accountSignedInView: document.getElementById("account-signed-in-view"),
+  accountUserEmail: document.getElementById("account-user-email"),
+  accountSignoutBtn: document.getElementById("account-signout-btn"),
+  accountSyncNowBtn: document.getElementById("account-sync-now-btn"),
+  accountAuthView: document.getElementById("account-auth-view"),
+  authTabSignin: document.getElementById("auth-tab-signin"),
+  authTabSignup: document.getElementById("auth-tab-signup"),
+  accountAuthForm: document.getElementById("account-auth-form"),
+  accountEmailInput: document.getElementById("account-email-input"),
+  accountPasswordInput: document.getElementById("account-password-input"),
+  accountSubmitBtn: document.getElementById("account-submit-btn"),
 
   // AI Helper
   aiChatbox: document.getElementById("ai-chatbox"),
@@ -661,6 +694,211 @@ function hideFormAlert(alertEl) {
 }
 
 // ---------------------------------------------------------------------------
+// Account & Database Sync Controls
+// ---------------------------------------------------------------------------
+
+function refreshAccountModal() {
+  const configured = isCloudSyncConfigured();
+  const user = getCurrentAuthUser();
+  const isSignedInWithEmail = Boolean(user && user.email && !user.isAnonymous);
+
+  if (dom.navAccountBtn) {
+    dom.navAccountBtn.textContent = "Account";
+  }
+
+  if (dom.accountUnconfiguredNotice) {
+    dom.accountUnconfiguredNotice.hidden = configured;
+  }
+
+  if (dom.accountSignedInView) {
+    dom.accountSignedInView.hidden = !isSignedInWithEmail;
+  }
+  if (dom.accountAuthView) {
+    dom.accountAuthView.hidden = isSignedInWithEmail;
+  }
+  if (dom.accountUserEmail) {
+    dom.accountUserEmail.textContent = user?.email || "";
+  }
+
+  const isSignIn = uiState.accountMode === "signin";
+  if (dom.authTabSignin) {
+    dom.authTabSignin.classList.toggle("is-active", isSignIn);
+    dom.authTabSignin.setAttribute("aria-selected", String(isSignIn));
+  }
+  if (dom.authTabSignup) {
+    dom.authTabSignup.classList.toggle("is-active", !isSignIn);
+    dom.authTabSignup.setAttribute("aria-selected", String(!isSignIn));
+  }
+  if (dom.accountPasswordInput) {
+    dom.accountPasswordInput.autocomplete = isSignIn
+      ? "current-password"
+      : "new-password";
+  }
+  if (dom.accountSubmitBtn) {
+    dom.accountSubmitBtn.disabled = uiState.accountBusy || !configured;
+    dom.accountSubmitBtn.textContent = uiState.accountBusy
+      ? isSignIn
+        ? "Signing in..."
+        : "Creating account..."
+      : isSignIn
+      ? "Sign In"
+      : "Create Account";
+  }
+  if (dom.accountSyncNowBtn) {
+    dom.accountSyncNowBtn.disabled = uiState.accountBusy;
+  }
+  if (dom.accountSignoutBtn) {
+    dom.accountSignoutBtn.disabled = uiState.accountBusy;
+  }
+}
+
+function openAccountModal() {
+  if (!dom.accountModal) return;
+  hideFormAlert(dom.accountError);
+  hideFormAlert(dom.accountInfo);
+  refreshAccountModal();
+  dom.accountModal.hidden = false;
+  const user = getCurrentAuthUser();
+  if (!user || !user.email || user.isAnonymous) {
+    window.setTimeout(() => dom.accountEmailInput?.focus(), 0);
+  }
+}
+
+function closeAccountModal() {
+  if (dom.accountModal) {
+    dom.accountModal.hidden = true;
+  }
+  hideFormAlert(dom.accountError);
+  hideFormAlert(dom.accountInfo);
+}
+
+function setAccountMode(mode) {
+  uiState.accountMode = mode;
+  hideFormAlert(dom.accountError);
+  hideFormAlert(dom.accountInfo);
+  refreshAccountModal();
+}
+
+async function handleAccountAuthSubmit(event) {
+  event.preventDefault();
+  if (uiState.accountBusy) return;
+
+  hideFormAlert(dom.accountError);
+  hideFormAlert(dom.accountInfo);
+
+  const email = (dom.accountEmailInput?.value || "").trim();
+  const password = dom.accountPasswordInput?.value || "";
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showFormAlert(
+      dom.accountError,
+      dom.accountErrorText,
+      "Please enter a valid email address."
+    );
+    dom.accountEmailInput?.focus();
+    return;
+  }
+
+  if (password.length < 6) {
+    showFormAlert(
+      dom.accountError,
+      dom.accountErrorText,
+      "Password must be at least 6 characters."
+    );
+    dom.accountPasswordInput?.focus();
+    return;
+  }
+
+  uiState.accountBusy = true;
+  refreshAccountModal();
+
+  try {
+    if (uiState.accountMode === "signin") {
+      const result = await signInWithEmail(email, password, workspace);
+      workspace = result.state;
+      if (dom.accountPasswordInput) dom.accountPasswordInput.value = "";
+      renderApp();
+      closeAccountModal();
+      showSaveNotification(`Signed in as ${result.user.email} and synced tasks.`);
+    } else {
+      const result = await signUpWithEmail(email, password, workspace);
+      if (dom.accountPasswordInput) dom.accountPasswordInput.value = "";
+      if (result.needsEmailConfirmation) {
+        showFormAlert(
+          dom.accountInfo,
+          dom.accountInfoText,
+          "Account created! Check your email inbox to confirm your address, then sign in."
+        );
+        uiState.accountMode = "signin";
+      } else {
+        workspace = result.state;
+        renderApp();
+        closeAccountModal();
+        showSaveNotification(`Account created for ${result.user.email} and synced tasks.`);
+      }
+    }
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Authentication failed. Please try again.";
+    showFormAlert(dom.accountError, dom.accountErrorText, message);
+  } finally {
+    uiState.accountBusy = false;
+    refreshAccountModal();
+  }
+}
+
+async function handleAccountSyncNow() {
+  if (uiState.accountBusy) return;
+  hideFormAlert(dom.accountError);
+  hideFormAlert(dom.accountInfo);
+  uiState.accountBusy = true;
+  refreshAccountModal();
+
+  try {
+    const result = await syncWorkspaceNow(workspace);
+    if (!result.ok) {
+      showFormAlert(
+        dom.accountError,
+        dom.accountErrorText,
+        result.error || "Could not sync to Supabase right now."
+      );
+    } else {
+      showFormAlert(
+        dom.accountInfo,
+        dom.accountInfoText,
+        "Workspace synced to Supabase."
+      );
+    }
+  } finally {
+    uiState.accountBusy = false;
+    refreshAccountModal();
+  }
+}
+
+async function handleAccountSignOut() {
+  if (uiState.accountBusy) return;
+  hideFormAlert(dom.accountError);
+  hideFormAlert(dom.accountInfo);
+  uiState.accountBusy = true;
+  refreshAccountModal();
+
+  try {
+    await signOutAccount();
+    showSaveNotification(
+      "Signed out of cloud sync. Your tasks remain saved locally in this browser.",
+      "info"
+    );
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Unable to sign out right now.";
+    showFormAlert(dom.accountError, dom.accountErrorText, message);
+  } finally {
+    uiState.accountBusy = false;
+    refreshAccountModal();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // AI Helper Controls
 // ---------------------------------------------------------------------------
 
@@ -774,6 +1012,7 @@ function bindEvents() {
   dom.backToTasksBtn?.addEventListener("click", () => setActiveView("tasks"));
   dom.navDocsBtn?.addEventListener("click", () => openDocsModal("modules"));
   dom.navPrivacyBtn?.addEventListener("click", () => openDocsModal("privacy"));
+  dom.navAccountBtn?.addEventListener("click", openAccountModal);
   dom.headerAiBtn?.addEventListener("click", openAiChatbox);
 
   // Workspace Action Buttons
@@ -986,6 +1225,24 @@ function bindEvents() {
   dom.docsTabModules?.addEventListener("click", () => setDocsTab("modules"));
   dom.docsTabPrivacy?.addEventListener("click", () => setDocsTab("privacy"));
 
+  // Account Modal Events
+  dom.closeAccountBtn?.addEventListener("click", closeAccountModal);
+  dom.cancelAccountBtn?.addEventListener("click", closeAccountModal);
+  dom.accountModal?.addEventListener("click", (event) => {
+    if (event.target === dom.accountModal) closeAccountModal();
+  });
+  dom.authTabSignin?.addEventListener("click", () => setAccountMode("signin"));
+  dom.authTabSignup?.addEventListener("click", () => setAccountMode("signup"));
+  dom.accountAuthForm?.addEventListener("submit", (event) => {
+    void handleAccountAuthSubmit(event);
+  });
+  dom.accountSyncNowBtn?.addEventListener("click", () => {
+    void handleAccountSyncNow();
+  });
+  dom.accountSignoutBtn?.addEventListener("click", () => {
+    void handleAccountSignOut();
+  });
+
   // AI Helper Events
   dom.aiFloatingBtn?.addEventListener("click", openAiChatbox);
   dom.closeAiChatBtn?.addEventListener("click", closeAiChatbox);
@@ -1021,15 +1278,24 @@ function bindEvents() {
     }
     if (dom.docsModal && !dom.docsModal.hidden) {
       closeDocsModal();
+      return;
+    }
+    if (dom.accountModal && !dom.accountModal.hidden) {
+      closeAccountModal();
     }
   });
 }
 
 function init() {
-  const initialLoad = loadWorkspaceState((restoredWorkspace) => {
-    workspace = restoredWorkspace;
-    renderApp();
-  });
+  const initialLoad = loadWorkspaceState(
+    (restoredWorkspace) => {
+      workspace = restoredWorkspace;
+      renderApp();
+    },
+    () => {
+      refreshAccountModal();
+    }
+  );
   workspace = initialLoad.state;
 
   if (dom.todayDateLabel) {
@@ -1041,6 +1307,7 @@ function init() {
   }
 
   bindEvents();
+  refreshAccountModal();
   renderApp();
 
   if (initialLoad.error) {

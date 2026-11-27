@@ -3,7 +3,8 @@
  *
  * `localStorage` serves as the immediate synchronous store and offline fallback.
  * When `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are configured, the
- * workspace is also synced asynchronously to `task_workspaces` via anonymous auth.
+ * workspace syncs to `public.task_workspaces` under either an email/password
+ * account (cross-device) or an anonymous session.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -34,6 +35,36 @@ let localRevision = 0;
 let latestLocalState = null;
 let cloudSaveTimer = null;
 let cloudUserId = null;
+let currentAuthUser = null;
+let authChangeListener = null;
+
+/**
+ * Returns whether Supabase environment variables are configured in this build.
+ */
+export function isCloudSyncConfigured() {
+  return Boolean(supabase);
+}
+
+/**
+ * Returns the active Supabase user summary (`{ id, email, isAnonymous }`), or null.
+ */
+export function getCurrentAuthUser() {
+  return currentAuthUser;
+}
+
+function setCurrentAuthUser(user) {
+  currentAuthUser = user
+    ? {
+        id: user.id,
+        email: typeof user.email === "string" && user.email ? user.email : null,
+        isAnonymous: Boolean(user.is_anonymous || !user.email),
+      }
+    : null;
+  cloudUserId = currentAuthUser ? currentAuthUser.id : null;
+  if (typeof authChangeListener === "function") {
+    authChangeListener(currentAuthUser);
+  }
+}
 
 /**
  * Returns a clean default workspace state.
@@ -118,8 +149,39 @@ function statesMatch(first, second) {
   return JSON.stringify(first) === JSON.stringify(second);
 }
 
+/**
+ * Merges a remote Supabase workspace with any local tasks created before sign-in
+ * so neither remote nor local items are lost.
+ */
+function mergeWorkspaces(localState, remoteState) {
+  const remoteTaskIds = new Set(remoteState.tasks.map((t) => t.id));
+  const remoteBinIds = new Set(remoteState.recycleBin.map((t) => t.id));
+
+  const extraLocalTasks = localState.tasks.filter(
+    (t) => !remoteTaskIds.has(t.id) && !remoteBinIds.has(t.id)
+  );
+  const extraLocalBin = localState.recycleBin.filter(
+    (t) => !remoteBinIds.has(t.id) && !remoteTaskIds.has(t.id)
+  );
+
+  return normalizeWorkspaceState({
+    version: 1,
+    tasks: [...remoteState.tasks, ...extraLocalTasks],
+    recycleBin: [...remoteState.recycleBin, ...extraLocalBin],
+    classifications: Array.from(
+      new Set([...remoteState.classifications, ...localState.classifications])
+    ),
+    classificationColors: {
+      ...localState.classificationColors,
+      ...remoteState.classificationColors,
+    },
+  });
+}
+
 async function persistCloudState(state) {
-  if (!supabase || !cloudUserId) return;
+  if (!supabase || !cloudUserId) {
+    return { ok: false, error: "Cloud sync is not active." };
+  }
   const { error } = await supabase.from("task_workspaces").upsert(
     {
       user_id: cloudUserId,
@@ -130,7 +192,9 @@ async function persistCloudState(state) {
   );
   if (error) {
     console.error("Could not sync the workspace to Supabase:", error.message);
+    return { ok: false, error: error.message };
   }
+  return { ok: true };
 }
 
 function queueCloudSave(state) {
@@ -142,8 +206,56 @@ function queueCloudSave(state) {
     window.clearTimeout(cloudSaveTimer);
   }
   cloudSaveTimer = window.setTimeout(() => {
+    cloudSaveTimer = null;
     void persistCloudState(state);
   }, 300);
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    if (cloudSaveTimer && latestLocalState && supabase && cloudUserId) {
+      window.clearTimeout(cloudSaveTimer);
+      cloudSaveTimer = null;
+      void persistCloudState(latestLocalState);
+    }
+  });
+}
+
+async function reconcileUserWorkspace(userId, localState, mergeLocalOnRemote) {
+  const { data: row, error: readError } = await supabase
+    .from("task_workspaces")
+    .select("state")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (readError) throw readError;
+
+  if (!row) {
+    const saveRes = await persistCloudState(localState);
+    if (!saveRes.ok) {
+      throw new Error(saveRes.error || "Failed to initialize remote workspace.");
+    }
+    return localState;
+  }
+
+  const remote = row.state;
+  if (!remote || remote.version !== 1) {
+    throw new Error("The Supabase workspace has an unsupported data format.");
+  }
+
+  const remoteState = normalizeWorkspaceState(remote);
+  const nextState = mergeLocalOnRemote
+    ? mergeWorkspaces(localState, remoteState)
+    : remoteState;
+
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
+  latestLocalState = nextState;
+
+  if (!statesMatch(nextState, remoteState)) {
+    await persistCloudState(nextState);
+  }
+
+  return nextState;
 }
 
 async function initializeCloudPersistence(localState, onCloudRestore) {
@@ -168,14 +280,8 @@ async function initializeCloudPersistence(localState, onCloudRestore) {
     if (!user) {
       throw new Error("Supabase did not return an authenticated user.");
     }
-    cloudUserId = user.id;
 
-    const { data: row, error: readError } = await supabase
-      .from("task_workspaces")
-      .select("state")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (readError) throw readError;
+    setCurrentAuthUser(user);
 
     if (localRevision !== revisionAtStart) {
       if (latestLocalState) {
@@ -184,25 +290,12 @@ async function initializeCloudPersistence(localState, onCloudRestore) {
       return;
     }
 
-    if (!row) {
-      await persistCloudState(latestLocalState ?? localState);
-      return;
-    }
-
-    const remote = row.state;
-    if (!remote || remote.version !== 1) {
-      throw new Error("The Supabase workspace has an unsupported data format.");
-    }
-
-    const remoteState = normalizeWorkspaceState(remote);
     const currentLocal = latestLocalState ?? localState;
+    const syncedState = await reconcileUserWorkspace(user.id, currentLocal, false);
 
-    if (!statesMatch(currentLocal, remoteState)) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(remoteState));
-      latestLocalState = remoteState;
-
+    if (!statesMatch(currentLocal, syncedState)) {
       if (typeof onCloudRestore === "function") {
-        onCloudRestore(remoteState);
+        onCloudRestore(syncedState);
       } else if (window.sessionStorage.getItem(CLOUD_RELOAD_KEY) !== "1") {
         window.sessionStorage.setItem(CLOUD_RELOAD_KEY, "1");
         window.location.reload();
@@ -227,7 +320,11 @@ async function initializeCloudPersistence(localState, onCloudRestore) {
 /**
  * Loads workspace state synchronously from localStorage and triggers optional cloud sync.
  */
-export function loadWorkspaceState(onCloudRestore) {
+export function loadWorkspaceState(onCloudRestore, onAuthChange) {
+  if (typeof onAuthChange === "function") {
+    authChangeListener = onAuthChange;
+  }
+
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     const state = raw
@@ -260,4 +357,108 @@ export function saveWorkspaceState(state) {
     const reason = err instanceof Error ? err.message : "Browser storage quota exceeded";
     return { ok: false, error: `Failed to save tasks locally: ${reason}` };
   }
+}
+
+/**
+ * Signs into an existing Supabase email/password account and merges/syncs tasks.
+ */
+export async function signInWithEmail(email, password, currentLocalState) {
+  if (!supabase) {
+    throw new Error(
+      "Supabase is not configured in this environment. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable account sync."
+    );
+  }
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: email.trim(),
+    password,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  if (!data.user) {
+    throw new Error("Sign-in succeeded without returning a user session.");
+  }
+
+  setCurrentAuthUser(data.user);
+  const baseLocal = currentLocalState ?? latestLocalState ?? createInitialState();
+  const syncedState = await reconcileUserWorkspace(data.user.id, baseLocal, true);
+
+  return { user: currentAuthUser, state: syncedState };
+}
+
+/**
+ * Creates a new Supabase email/password account and uploads local tasks if immediately authenticated.
+ */
+export async function signUpWithEmail(email, password, currentLocalState) {
+  if (!supabase) {
+    throw new Error(
+      "Supabase is not configured in this environment. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to enable account sync."
+    );
+  }
+
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (data.session && data.user) {
+    setCurrentAuthUser(data.user);
+    const baseLocal = currentLocalState ?? latestLocalState ?? createInitialState();
+    const syncedState = await reconcileUserWorkspace(data.user.id, baseLocal, true);
+    return {
+      user: currentAuthUser,
+      state: syncedState,
+      needsEmailConfirmation: false,
+    };
+  }
+
+  return {
+    user: null,
+    state: currentLocalState ?? latestLocalState ?? createInitialState(),
+    needsEmailConfirmation: true,
+  };
+}
+
+/**
+ * Signs out of the current Supabase account while keeping local tasks in browser storage.
+ */
+export async function signOutAccount() {
+  if (!supabase) return;
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    throw new Error(error.message);
+  }
+  setCurrentAuthUser(null);
+}
+
+/**
+ * Immediately flushes the current workspace state to Supabase.
+ */
+export async function syncWorkspaceNow(currentState) {
+  if (!supabase) {
+    return {
+      ok: false,
+      error: "Supabase is not configured in this environment.",
+    };
+  }
+  if (!cloudUserId) {
+    return {
+      ok: false,
+      error: "Please sign in first to sync your tasks to Supabase.",
+    };
+  }
+
+  if (cloudSaveTimer) {
+    window.clearTimeout(cloudSaveTimer);
+    cloudSaveTimer = null;
+  }
+  latestLocalState = currentState;
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(currentState));
+  return persistCloudState(currentState);
 }

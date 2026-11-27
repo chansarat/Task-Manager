@@ -50,6 +50,9 @@
             <button type="button" id="nav-privacy-btn" class="nav-link nav-link-desktop">
               Privacy
             </button>
+            <button type="button" id="nav-account-btn" class="nav-link">
+              Account
+            </button>
           </nav>
 
           <div class="header-action">
@@ -446,6 +449,108 @@
             <button type="button" id="accept-confirm-btn" class="btn btn-danger btn-md">Confirm</button>
           </div>
         </div>
+      </div>
+
+      <!-- Account & Cross-Device Sync Modal -->
+      <div id="account-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="account-modal-title" hidden>
+        <section class="modal-card modal-card-md">
+          <div class="modal-header">
+            <div>
+              <h2 id="account-modal-title" class="modal-title">Account &amp; Database Sync</h2>
+              <p class="modal-subtitle">Sign in with email and password to sync your tasks across devices and sites.</p>
+            </div>
+            <button type="button" id="close-account-btn" class="icon-btn" aria-label="Close Account dialog">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div id="account-unconfigured-notice" class="form-info" hidden>
+            <p class="form-info-title">Cloud sync is not configured in this deployment</p>
+            <p class="form-info-text">
+              Your tasks are saved locally in this browser. To enable database sync here, add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in environment secrets and restart/redeploy.
+            </p>
+          </div>
+
+          <div id="account-error" class="form-alert" role="alert" hidden>
+            <svg class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" x2="12" y1="8" y2="12" />
+              <line x1="12" x2="12.01" y1="16" y2="16" />
+            </svg>
+            <span id="account-error-text"></span>
+          </div>
+
+          <div id="account-info" class="form-success" role="status" hidden>
+            <span id="account-info-text"></span>
+          </div>
+
+          <!-- Signed-in Email Account View -->
+          <div id="account-signed-in-view" class="account-signed-in" hidden>
+            <div class="account-profile-box">
+              <p class="account-profile-label">Signed in as</p>
+              <p id="account-user-email" class="account-profile-email"></p>
+              <p class="account-profile-note">
+                Your tasks automatically sync with your Supabase account whenever you add, edit, complete, or restore tasks.
+              </p>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" id="account-signout-btn" class="btn btn-outline-danger btn-md">Sign Out</button>
+              <button type="button" id="account-sync-now-btn" class="btn btn-primary btn-md">Sync Now</button>
+            </div>
+          </div>
+
+          <!-- Sign In / Create Account Form -->
+          <div id="account-auth-view">
+            <div class="auth-tabs" role="tablist" aria-label="Account mode">
+              <button type="button" role="tab" id="auth-tab-signin" aria-selected="true" class="auth-tab is-active">
+                Sign In
+              </button>
+              <button type="button" role="tab" id="auth-tab-signup" aria-selected="false" class="auth-tab">
+                Create Account
+              </button>
+            </div>
+
+            <form id="account-auth-form" novalidate class="modal-form">
+              <div class="form-field">
+                <label for="account-email-input" class="field-label">
+                  Email <span class="required-mark">*</span>
+                </label>
+                <input
+                  id="account-email-input"
+                  type="email"
+                  required
+                  autocomplete="email"
+                  placeholder="you@example.com"
+                  class="field-input"
+                />
+              </div>
+
+              <div class="form-field">
+                <label for="account-password-input" class="field-label">
+                  Password <span class="required-mark">*</span>
+                </label>
+                <input
+                  id="account-password-input"
+                  type="password"
+                  required
+                  minlength="6"
+                  autocomplete="current-password"
+                  placeholder="Minimum 6 characters"
+                  class="field-input"
+                />
+              </div>
+
+              <div class="modal-footer">
+                <button type="button" id="cancel-account-btn" class="btn btn-outline btn-md">Close</button>
+                <button type="submit" id="account-submit-btn" class="btn btn-primary btn-md">Sign In</button>
+              </div>
+            </form>
+          </div>
+        </section>
       </div>
 
       <!-- Module Docs & Privacy Modal -->

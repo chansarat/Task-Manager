@@ -37,4 +37,4 @@ Restart the dev server after changing environment variables. For deployment, con
 - Without Supabase environment variables, the app continues to work locally as before.
 - The public anon/publishable key is not a secret. The `service_role` key is privileged and must never be exposed in frontend variables.
 
-Anonymous accounts are separate for each browser profile and device. For durable cross-device access, add a real sign-in flow and associate workspaces with the signed-in user rather than relying on anonymous authentication.
+Anonymous accounts are separate for each browser profile and domain. To sync the same tasks across devices or between AI Studio and GitHub Pages, enable the **Email** provider in **Authentication → Providers** and sign in using the **Account** button in the top navigation bar.
