@@ -1,20 +1,14 @@
 /**
- * @fileoverview Pure domain logic helpers for TaskLedger.
+ * @fileoverview Pure domain helpers for Task Manager (Vanilla JavaScript).
  *
- * Handles duplicate task detection (task name + due date & time), 5-mode
- * filtering, aggregate task metrics calculation, and date/time formatting.
+ * Handles ID generation, duplicate task detection (name + date + time),
+ * urgency & completion sorting, 5-mode filtering, metrics, and date formatting.
  */
-
-import type {
-  Task,
-  TaskFilterState,
-  TaskMetrics,
-} from "../types/task";
 
 /**
- * Generates a collision-resistant identifier for tasks and notifications.
+ * Generates a collision-resistant unique identifier.
  */
-export function generateId(): string {
+export function generateId() {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
@@ -24,7 +18,7 @@ export function generateId(): string {
 /**
  * Returns today's local calendar date formatted as `YYYY-MM-DD`.
  */
-export function getLocalTodayDateString(): string {
+export function getLocalTodayDateString() {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
@@ -33,26 +27,25 @@ export function getLocalTodayDateString(): string {
 }
 
 /**
+ * Returns tomorrow's local calendar date formatted as `YYYY-MM-DD`.
+ */
+function getLocalTomorrowDateString() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const year = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
+  const day = String(tomorrow.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Checks whether submitting a task with `(title, dueDate, dueTime)` duplicates
  * an existing active task with the exact same normalized name and date/time.
- *
- * @param tasks - Existing active tasks.
- * @param title - Candidate task title.
- * @param dueDate - Candidate due date (`YYYY-MM-DD` or `""`).
- * @param dueTime - Candidate due time (`HH:mm` or `""`).
- * @param excludeTaskId - Optional task ID to ignore when updating an existing task.
- * @returns Matching duplicate Task if found, otherwise `null`.
  */
-export function findDuplicateTask(
-  tasks: Task[],
-  title: string,
-  dueDate: string,
-  dueTime: string,
-  excludeTaskId?: string
-): Task | null {
-  const normalizedTitle = title.trim().toLowerCase();
-  const normalizedDate = dueDate.trim();
-  const normalizedTime = dueTime.trim();
+export function findDuplicateTask(tasks, title, dueDate, dueTime, excludeTaskId = null) {
+  const normalizedTitle = String(title || "").trim().toLowerCase();
+  const normalizedDate = String(dueDate || "").trim();
+  const normalizedTime = String(dueTime || "").trim();
 
   if (!normalizedTitle) {
     return null;
@@ -65,19 +58,18 @@ export function findDuplicateTask(
         task.title.trim().toLowerCase() === normalizedTitle &&
         task.dueDate.trim() === normalizedDate &&
         task.dueTime.trim() === normalizedTime
-    ) ?? null
+    ) || null
   );
 }
 
 /**
  * Computes Total, Pending, Completed counts and overall Progress Percentage.
  */
-export function calculateTaskMetrics(tasks: Task[]): TaskMetrics {
+export function calculateTaskMetrics(tasks) {
   const total = tasks.length;
   const completed = tasks.filter((t) => t.status === "completed").length;
   const pending = total - completed;
-  const progressPercentage =
-    total === 0 ? 0 : Math.round((completed / total) * 100);
+  const progressPercentage = total === 0 ? 0 : Math.round((completed / total) * 100);
 
   return {
     total,
@@ -90,7 +82,7 @@ export function calculateTaskMetrics(tasks: Task[]): TaskMetrics {
 /**
  * Determines whether a pending task's scheduled due date/time is in the past.
  */
-export function isTaskOverdue(task: Task): boolean {
+export function isTaskOverdue(task) {
   if (task.status === "completed" || !task.dueDate) {
     return false;
   }
@@ -109,25 +101,13 @@ export function isTaskOverdue(task: Task): boolean {
 }
 
 /**
- * Returns tomorrow's local calendar date formatted as `YYYY-MM-DD`.
- */
-function getLocalTomorrowDateString(): string {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const year = tomorrow.getFullYear();
-  const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
-  const day = String(tomorrow.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-/**
  * Returns an urgency tier for a pending task:
- * - `0`: Overdue
- * - `1`: Due today
- * - `2`: Due tomorrow
- * - `3`: Not urgent (due later or unscheduled)
+ * - 0: Overdue
+ * - 1: Due today
+ * - 2: Due tomorrow
+ * - 3: Not urgent (due later or unscheduled)
  */
-export function getTaskUrgencyTier(task: Task): 0 | 1 | 2 | 3 {
+export function getTaskUrgencyTier(task) {
   if (task.status === "completed" || !task.dueDate) {
     return 3;
   }
@@ -146,14 +126,9 @@ export function getTaskUrgencyTier(task: Task): 0 | 1 | 2 | 3 {
 }
 
 /**
- * Sorts tasks so:
- * 1. Pending tasks always appear before completed tasks (completed tasks move down).
- * 2. Urgent pending tasks (overdue, due today, due tomorrow) appear at the top,
- *    ordered by earliest deadline.
- * 3. Other pending tasks are ordered newest-first (`createdAt` descending).
- * 4. Completed tasks are ordered by most recently updated/completed first.
+ * Sorts tasks so pending urgent/newest tasks stay on top and completed tasks move down.
  */
-export function sortTasksForDisplay(tasks: Task[]): Task[] {
+export function sortTasksForDisplay(tasks) {
   return [...tasks].sort((a, b) => {
     if (a.status !== b.status) {
       return a.status === "pending" ? -1 : 1;
@@ -161,9 +136,7 @@ export function sortTasksForDisplay(tasks: Task[]): Task[] {
 
     if (a.status === "completed") {
       const updatedDiff = b.updatedAt.localeCompare(a.updatedAt);
-      return updatedDiff !== 0
-        ? updatedDiff
-        : b.createdAt.localeCompare(a.createdAt);
+      return updatedDiff !== 0 ? updatedDiff : b.createdAt.localeCompare(a.createdAt);
     }
 
     const tierA = getTaskUrgencyTier(a);
@@ -172,7 +145,6 @@ export function sortTasksForDisplay(tasks: Task[]): Task[] {
       return tierA - tierB;
     }
 
-    // Within urgent tiers (0, 1, 2), sort earliest due date/time first
     if (tierA < 3) {
       const dateCompare = a.dueDate.localeCompare(b.dueDate);
       if (dateCompare !== 0) {
@@ -186,21 +158,17 @@ export function sortTasksForDisplay(tasks: Task[]): Task[] {
       }
     }
 
-    // Newest created task at the top
     return b.createdAt.localeCompare(a.createdAt);
   });
 }
 
 /**
- * Filters the active task list according to the selected filter mode and
- * secondary criteria (due date preset / specific date / classification),
- * then sorts with urgent and newest pending tasks on top and completed tasks
- * moved to the bottom.
+ * Filters tasks across the 5 supported modes and applies priority/recency sorting.
  */
-export function filterTasks(tasks: Task[], filter: TaskFilterState): Task[] {
+export function filterTasks(tasks, filter) {
   const today = getLocalTodayDateString();
+  let matched;
 
-  let matched: Task[];
   switch (filter.mode) {
     case "all":
       matched = tasks;
@@ -214,7 +182,7 @@ export function filterTasks(tasks: Task[], filter: TaskFilterState): Task[] {
       matched = tasks.filter((task) => task.status === "completed");
       break;
 
-    case "dueDate": {
+    case "dueDate":
       switch (filter.dueDatePreset) {
         case "all_scheduled":
           matched = tasks.filter((task) => task.dueDate !== "");
@@ -240,13 +208,9 @@ export function filterTasks(tasks: Task[], filter: TaskFilterState): Task[] {
           matched = tasks;
       }
       break;
-    }
 
-    case "classification": {
-      if (
-        !filter.selectedClassification ||
-        filter.selectedClassification === "__ALL__"
-      ) {
+    case "classification":
+      if (!filter.selectedClassification || filter.selectedClassification === "__ALL__") {
         matched = tasks;
       } else {
         matched = tasks.filter(
@@ -256,7 +220,6 @@ export function filterTasks(tasks: Task[], filter: TaskFilterState): Task[] {
         );
       }
       break;
-    }
 
     default:
       matched = tasks;
@@ -266,18 +229,18 @@ export function filterTasks(tasks: Task[], filter: TaskFilterState): Task[] {
 }
 
 /**
- * Formats a `YYYY-MM-DD` and optional `HH:mm` into a clean human-readable string.
+ * Formats a `YYYY-MM-DD` and optional `HH:mm` into a human-readable schedule label.
  */
-export function formatDueSchedule(dueDate: string, dueTime: string): string {
+export function formatDueSchedule(dueDate, dueTime) {
   if (!dueDate && !dueTime) {
     return "No due date";
   }
 
   let datePart = "";
   if (dueDate) {
-    const [year, month, day] = dueDate.split("-").map(Number);
-    if (year && month && day) {
-      const d = new Date(year, month - 1, day);
+    const parts = dueDate.split("-").map(Number);
+    if (parts[0] && parts[1] && parts[2]) {
+      const d = new Date(parts[0], parts[1] - 1, parts[2]);
       datePart = d.toLocaleDateString(undefined, {
         month: "short",
         day: "numeric",
@@ -308,9 +271,9 @@ export function formatDueSchedule(dueDate: string, dueTime: string): string {
 }
 
 /**
- * Formats an ISO timestamp string into a concise local date & time label.
+ * Formats an ISO timestamp into a short local date & time string.
  */
-export function formatTimestamp(isoString: string): string {
+export function formatTimestamp(isoString) {
   const date = new Date(isoString);
   if (Number.isNaN(date.getTime())) {
     return isoString;

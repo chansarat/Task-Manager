@@ -4,9 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Task Manager — Local-First Task &amp; Productivity Manager</title>
-    <meta name="description" content="A private, local-first task manager with classifications, 5-mode filtering, a multi-select Recycle Bin, and an on-demand AI Helper." />
+    <meta
+      name="description"
+      content="A private, local-first task manager built with HTML, CSS, and Vanilla JavaScript featuring classifications, 5-mode filtering, a multi-select Recycle Bin, and an on-demand AI Helper."
+    />
     <meta property="og:title" content="Task Manager — Local-First Task &amp; Productivity Manager" />
-    <meta property="og:description" content="A private, local-first task manager with classifications, 5-mode filtering, a multi-select Recycle Bin, and an on-demand AI Helper." />
+    <meta
+      property="og:description"
+      content="A private, local-first task manager with classifications, 5-mode filtering, a multi-select Recycle Bin, and an on-demand AI Helper."
+    />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -15,10 +21,583 @@
       href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
+    <link rel="stylesheet" href="/src/styles/main.css" />
   </head>
-  <body class="bg-sky-50 text-slate-900 antialiased selection:bg-blue-200 selection:text-blue-950">
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+  <body>
+    <div class="app-shell">
+      <!-- Top Navigation Bar (3-Zone Header Contract) -->
+      <header class="top-header">
+        <div class="top-header-inner">
+          <button type="button" id="brand-home-btn" class="brand-wordmark">
+            Task Manager
+          </button>
+
+          <nav aria-label="Primary navigation" class="top-nav">
+            <button
+              type="button"
+              id="nav-tasks-btn"
+              class="nav-link is-active"
+              aria-current="page"
+            >
+              Tasks
+            </button>
+            <button type="button" id="nav-bin-btn" class="nav-link tabular-nums">
+              Recycle Bin (<span id="nav-bin-count">0</span>)
+            </button>
+            <button type="button" id="nav-docs-btn" class="nav-link nav-link-desktop">
+              Module Docs
+            </button>
+            <button type="button" id="nav-privacy-btn" class="nav-link nav-link-desktop">
+              Privacy
+            </button>
+          </nav>
+
+          <div class="header-action">
+            <button type="button" id="header-ai-btn" class="btn btn-primary btn-sm">
+              AI Helper
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Workspace -->
+      <main class="workspace">
+        <!-- Workspace Title & Primary Controls -->
+        <div class="workspace-header">
+          <div>
+            <h1 id="workspace-title" class="workspace-title">Task Workspace</h1>
+            <p id="workspace-subtitle" class="workspace-subtitle">
+              Organize tasks by classification and due date, track completion progress, and keep everything saved locally.
+            </p>
+          </div>
+
+          <div class="workspace-actions">
+            <p id="today-date-label" class="today-label"></p>
+            <div id="tasks-toolbar-buttons" class="toolbar-btn-group">
+              <button type="button" id="open-classification-btn" class="btn btn-secondary btn-xs">
+                <svg class="icon-sm icon-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 10v6" />
+                  <path d="M9 13h6" />
+                  <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+                </svg>
+                New Classification
+              </button>
+
+              <button type="button" id="open-add-task-btn" class="btn btn-primary btn-xs">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 12h14" />
+                  <path d="M12 5v14" />
+                </svg>
+                Add New Task
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Visible Save Confirmation Banner -->
+        <div id="save-banner" class="save-banner" role="status" aria-live="polite" hidden>
+          <div class="save-banner-content">
+            <span id="save-banner-icon" class="save-banner-icon" aria-hidden="true"></span>
+            <span id="save-banner-message" class="save-banner-message"></span>
+            <span id="save-banner-time" class="save-banner-time tabular-nums"></span>
+          </div>
+          <button
+            type="button"
+            id="dismiss-save-banner-btn"
+            class="icon-btn"
+            aria-label="Dismiss save confirmation"
+          >
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- 4-Column Summary Metrics Strip -->
+        <section aria-label="Task progress summary" class="stats-card">
+          <div class="stats-grid">
+            <div class="stat-cell">
+              <p class="stat-label">Total Tasks</p>
+              <p id="stat-total" class="stat-value stat-value-dark tabular-nums">0</p>
+            </div>
+
+            <div class="stat-cell">
+              <p class="stat-label">Pending Tasks</p>
+              <p id="stat-pending" class="stat-value stat-value-amber tabular-nums">0</p>
+            </div>
+
+            <div class="stat-cell">
+              <p class="stat-label">Completed Tasks</p>
+              <p id="stat-completed" class="stat-value stat-value-emerald tabular-nums">0</p>
+            </div>
+
+            <div class="stat-cell stat-cell-highlight">
+              <div class="stat-progress-head">
+                <p class="stat-label stat-label-blue">Progress</p>
+                <span id="stat-fraction" class="stat-fraction tabular-nums">0/0</span>
+              </div>
+              <p id="stat-progress" class="stat-value stat-value-blue tabular-nums">0%</p>
+            </div>
+          </div>
+
+          <div
+            id="overall-progressbar"
+            class="progress-track"
+            role="progressbar"
+            aria-valuenow="0"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-label="Overall task completion 0%"
+          >
+            <div id="overall-progress-fill" class="progress-fill" style="width: 0%"></div>
+          </div>
+        </section>
+
+        <!-- Tasks View -->
+        <div id="tasks-view" class="view-stack">
+          <!-- 5-Mode Filter Bar -->
+          <section aria-label="Filter tasks" class="card filter-card">
+            <div class="filter-top-row">
+              <div role="tablist" aria-label="Task filter categories" class="filter-tabs" id="filter-tabs">
+                <button type="button" role="tab" data-filter-mode="all" aria-selected="true" class="filter-tab is-active">
+                  All Tasks
+                </button>
+                <button type="button" role="tab" data-filter-mode="pending" aria-selected="false" class="filter-tab">
+                  Pending Tasks
+                </button>
+                <button type="button" role="tab" data-filter-mode="completed" aria-selected="false" class="filter-tab">
+                  Completed Tasks
+                </button>
+                <button type="button" role="tab" data-filter-mode="dueDate" aria-selected="false" class="filter-tab">
+                  Due Date
+                </button>
+                <button type="button" role="tab" data-filter-mode="classification" aria-selected="false" class="filter-tab">
+                  Classification
+                </button>
+              </div>
+
+              <div class="filter-meta-actions">
+                <span id="filter-count-label" class="filter-count tabular-nums">
+                  Showing 0 of 0
+                </span>
+                <button type="button" id="clear-completed-btn" class="btn btn-outline-danger btn-xs" disabled>
+                  <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 6h18" />
+                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                  </svg>
+                  Clear Completed (<span id="clear-completed-count">0</span>)
+                </button>
+              </div>
+            </div>
+
+            <!-- Secondary Due Date Filter Controls -->
+            <div id="due-date-subfilter" class="subfilter-row" hidden>
+              <span class="subfilter-label">Due date filter:</span>
+              <div id="due-date-presets" class="subfilter-presets">
+                <button type="button" data-date-preset="all_scheduled" class="preset-btn is-active">All Scheduled</button>
+                <button type="button" data-date-preset="today" class="preset-btn">Today</button>
+                <button type="button" data-date-preset="upcoming" class="preset-btn">Upcoming</button>
+                <button type="button" data-date-preset="overdue" class="preset-btn">Overdue</button>
+                <button type="button" data-date-preset="no_date" class="preset-btn">No Due Date</button>
+                <button type="button" data-date-preset="specific_date" class="preset-btn">Specific Date</button>
+              </div>
+              <label id="specific-date-wrap" class="specific-date-wrap" hidden>
+                <span class="sr-only">Pick a specific due date</span>
+                <input type="date" id="specific-date-input" class="input-mono-sm" />
+              </label>
+            </div>
+
+            <!-- Secondary Classification Filter Controls -->
+            <div id="classification-subfilter" class="subfilter-row" hidden>
+              <label for="filter-classification-select" class="subfilter-label">
+                Classification filter:
+              </label>
+              <select id="filter-classification-select" class="select-sm"></select>
+            </div>
+          </section>
+
+          <!-- Task List Container -->
+          <section id="task-list-section" aria-label="Task list" class="card list-card"></section>
+        </div>
+
+        <!-- Recycle Bin View -->
+        <section id="recycle-bin-view" aria-labelledby="recycle-bin-heading" class="view-stack" hidden>
+          <div class="card bin-toolbar">
+            <div>
+              <div class="bin-title-row">
+                <h2 id="recycle-bin-heading" class="section-heading">Recycle Bin</h2>
+                <span id="bin-items-count" class="bin-count tabular-nums">0 items</span>
+              </div>
+              <p class="section-subtext">
+                Deleted tasks are held here before permanent removal. Restore items anytime or select tasks to permanently delete.
+              </p>
+            </div>
+
+            <div class="bin-toolbar-actions">
+              <button type="button" id="back-to-tasks-btn" class="btn btn-outline btn-xs">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="m12 19-7-7 7-7" />
+                  <path d="M19 12H5" />
+                </svg>
+                Back to Tasks
+              </button>
+
+              <button type="button" id="delete-selected-bin-btn" class="btn btn-danger btn-xs" disabled>
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 6h18" />
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+                </svg>
+                Delete Selected (<span id="bin-selected-count">0</span>)
+              </button>
+            </div>
+          </div>
+
+          <div id="recycle-bin-list-container"></div>
+        </section>
+      </main>
+
+      <!-- Add New Task Modal -->
+      <div id="add-task-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="add-task-heading" hidden>
+        <section class="modal-card modal-card-lg">
+          <div class="modal-header">
+            <div>
+              <h2 id="add-task-heading" class="modal-title">Add New Task</h2>
+              <p class="modal-subtitle">Starts as pending and saves automatically.</p>
+            </div>
+            <button type="button" id="close-add-task-btn" class="icon-btn" aria-label="Close Add New Task dialog">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div id="add-task-error" class="form-alert" role="alert" hidden>
+            <svg class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" x2="12" y1="8" y2="12" />
+              <line x1="12" x2="12.01" y1="16" y2="16" />
+            </svg>
+            <span id="add-task-error-text"></span>
+          </div>
+
+          <form id="add-task-form" novalidate class="modal-form">
+            <div class="form-field">
+              <label for="task-title-input" class="field-label">
+                Task Name <span class="required-mark">*</span>
+              </label>
+              <input
+                id="task-title-input"
+                type="text"
+                maxlength="140"
+                required
+                placeholder="e.g., Prepare sprint review slides"
+                class="field-input"
+              />
+            </div>
+
+            <div class="form-field">
+              <label for="task-description-input" class="field-label">
+                Description <span class="optional-mark">(optional)</span>
+              </label>
+              <textarea
+                id="task-description-input"
+                rows="3"
+                maxlength="400"
+                placeholder="Add helpful context, steps, or notes..."
+                class="field-textarea"
+              ></textarea>
+            </div>
+
+            <div class="form-field">
+              <div class="field-label-row">
+                <label for="task-classification-select" class="field-label">Classification</label>
+                <span class="classification-preview">
+                  <span id="add-task-color-dot" class="color-swatch" aria-hidden="true"></span>
+                  <span id="add-task-color-name">Work</span>
+                </span>
+              </div>
+              <select id="task-classification-select" class="field-input"></select>
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-field">
+                <label for="task-due-date-input" class="field-label">Due Date</label>
+                <input id="task-due-date-input" type="date" class="field-input font-mono" />
+              </div>
+
+              <div class="form-field">
+                <label for="task-due-time-input" class="field-label">Due Time</label>
+                <input id="task-due-time-input" type="time" class="field-input font-mono" />
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" id="cancel-add-task-btn" class="btn btn-outline btn-md">Cancel</button>
+              <button type="submit" class="btn btn-primary btn-md">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M5 12h14" />
+                  <path d="M12 5v14" />
+                </svg>
+                Add Task
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <!-- New Classification & Color Assignment Modal -->
+      <div id="classification-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="classification-modal-title" hidden>
+        <section class="modal-card modal-card-md">
+          <div class="modal-header">
+            <div class="modal-header-with-icon">
+              <div class="modal-badge-icon">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 10v6" />
+                  <path d="M9 13h6" />
+                  <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+                </svg>
+              </div>
+              <div>
+                <h2 id="classification-modal-title" class="modal-title">New Classification</h2>
+                <p class="modal-subtitle">Create a classification or assign a color to any existing category.</p>
+              </div>
+            </div>
+            <button type="button" id="close-classification-btn" class="icon-btn" aria-label="Close New Classification dialog">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div id="classification-error" class="form-alert" role="alert" hidden>
+            <svg class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" x2="12" y1="8" y2="12" />
+              <line x1="12" x2="12.01" y1="16" y2="16" />
+            </svg>
+            <span id="classification-error-text"></span>
+          </div>
+
+          <form id="classification-form" novalidate class="modal-form">
+            <div class="form-field">
+              <label for="create-classification-name" class="field-label">
+                Classification Name <span class="required-mark">*</span>
+              </label>
+              <input
+                id="create-classification-name"
+                type="text"
+                maxlength="40"
+                placeholder="e.g., Finance, Health, Client Project"
+                class="field-input"
+              />
+            </div>
+
+            <div class="form-field">
+              <span class="field-label">Assign Color</span>
+              <div id="new-classification-color-grid" class="color-picker-grid"></div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-md btn-full">
+              Add Classification
+            </button>
+          </form>
+
+          <div class="existing-classifications-block">
+            <h3 id="existing-classifications-heading" class="existing-heading">
+              Existing Classifications (0)
+            </h3>
+            <ul id="existing-classifications-list" class="existing-list"></ul>
+          </div>
+        </section>
+      </div>
+
+      <!-- Confirmation Modal -->
+      <div id="confirm-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-desc" hidden>
+        <div class="modal-card modal-card-sm">
+          <div class="confirm-header">
+            <div class="confirm-header-left">
+              <div class="confirm-icon-box" aria-hidden="true">
+                <svg class="icon-md" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                  <path d="M12 9v4" />
+                  <path d="M12 17h.01" />
+                </svg>
+              </div>
+              <h2 id="confirm-dialog-title" class="modal-title-sm">Confirm</h2>
+            </div>
+
+            <button type="button" id="close-confirm-btn" class="icon-btn" aria-label="Close confirmation dialog">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <p id="confirm-dialog-desc" class="confirm-desc"></p>
+
+          <div class="confirm-actions">
+            <button type="button" id="cancel-confirm-btn" class="btn btn-outline btn-md">Cancel</button>
+            <button type="button" id="accept-confirm-btn" class="btn btn-danger btn-md">Confirm</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Module Docs & Privacy Modal -->
+      <div id="docs-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="docs-modal-title" hidden>
+        <div class="modal-card modal-card-lg docs-card">
+          <div class="docs-header">
+            <h2 id="docs-modal-title" class="modal-title-sm">Internal Modules &amp; API Reference</h2>
+            <button type="button" id="close-docs-btn" class="icon-btn" aria-label="Close documentation modal">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="docs-tabs">
+            <button type="button" id="docs-tab-modules" class="docs-tab is-active">Modules &amp; APIs</button>
+            <button type="button" id="docs-tab-privacy" class="docs-tab">Privacy &amp; Security</button>
+          </div>
+
+          <div id="docs-content-modules" class="docs-body">
+            <p>
+              Task Manager is built with pure HTML, CSS, and modular Vanilla JavaScript ES modules so each feature can be maintained cleanly:
+            </p>
+            <div class="docs-list">
+              <div class="docs-item">
+                <p class="docs-path">index.html</p>
+                <p class="docs-desc">Semantic HTML5 layout for the header, metrics strip, 5-mode filter bar, task list, Recycle Bin, modals, and AI Helper chatbox.</p>
+              </div>
+              <div class="docs-item">
+                <p class="docs-path">src/styles/main.css</p>
+                <p class="docs-desc">Responsive CSS stylesheet using custom properties, Grid, Flexbox, and accessible focus/reduced-motion rules.</p>
+              </div>
+              <div class="docs-item">
+                <p class="docs-path">src/js/storage.js</p>
+                <p class="docs-desc">Browser persistence (<code>localStorage</code>) with validation and optional Supabase sync.</p>
+              </div>
+              <div class="docs-item">
+                <p class="docs-path">src/js/taskHelpers.js</p>
+                <p class="docs-desc">Pure domain functions for duplicate detection, urgency/completion sorting, 5-mode filtering, metrics, and date formatting.</p>
+              </div>
+              <div class="docs-item">
+                <p class="docs-path">src/js/renderers.js &amp; src/js/main.js</p>
+                <p class="docs-desc">Safe DOM rendering (no raw HTML injection) and application state/event controller.</p>
+              </div>
+              <div class="docs-item">
+                <p class="docs-path">POST /api/ai-helper (server.ts)</p>
+                <p class="docs-desc">Express endpoint calling Gemini on the server for on-demand productivity inquiries.</p>
+              </div>
+            </div>
+          </div>
+
+          <div id="docs-content-privacy" class="docs-body" hidden>
+            <div class="privacy-callout">
+              <p class="privacy-callout-title">Local-First Task Storage</p>
+              <p class="privacy-callout-text">
+                All tasks, descriptions, classifications, due dates, and Recycle Bin items are stored inside your browser's <code>localStorage</code> under key <code>taskledger_workspace_v1</code>.
+              </p>
+            </div>
+            <ul class="privacy-list">
+              <li><strong>Zero task transmission to AI:</strong> Your saved task list is never sent to external AI services or public endpoints.</li>
+              <li><strong>Isolated AI Helper:</strong> Only the question you explicitly type inside the AI Helper Chatbox is sent to <code>/api/ai-helper</code>.</li>
+              <li><strong>Safe deletion lifecycle:</strong> Individual task deletions and completed-task clears confirm first and move items to the Recycle Bin before permanent deletion.</li>
+            </ul>
+          </div>
+
+          <div class="docs-footer">
+            <button type="button" id="docs-done-btn" class="btn btn-dark btn-xs">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Helper Floating Dock -->
+      <div class="ai-dock">
+        <aside id="ai-chatbox" class="ai-chatbox" aria-label="AI Helper Chatbox" hidden>
+          <div class="ai-chat-header">
+            <div class="ai-chat-title-group">
+              <svg class="icon-sm icon-sky" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <div>
+                <h2 class="ai-chat-title">AI Helper</h2>
+                <p class="ai-chat-subtitle">Task planning &amp; productivity guide</p>
+              </div>
+            </div>
+            <button type="button" id="close-ai-chat-btn" class="ai-close-btn" aria-label="Close AI Helper Chatbox">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="ai-privacy-bar">
+            <svg class="icon-xs icon-emerald shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+            <span>Private by design: Your saved task list stays in your browser and is never sent to external services.</span>
+          </div>
+
+          <div id="ai-messages-list" class="ai-messages"></div>
+
+          <div id="ai-quick-prompts" class="ai-quick-prompts">
+            <p class="ai-quick-label">Quick questions:</p>
+            <div id="ai-quick-buttons" class="ai-quick-list"></div>
+          </div>
+
+          <form id="ai-chat-form" class="ai-chat-form">
+            <label for="ai-helper-input" class="sr-only">Ask AI Helper a question</label>
+            <input
+              id="ai-helper-input"
+              type="text"
+              maxlength="2000"
+              placeholder="Ask how to organize or plan..."
+              class="ai-chat-input"
+            />
+            <button type="submit" id="ai-send-btn" class="ai-send-btn" aria-label="Send question to AI Helper" disabled>
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m22 2-7 20-4-9-9-4Z" />
+                <path d="M22 2 11 13" />
+              </svg>
+            </button>
+          </form>
+        </aside>
+
+        <!-- Non-blocking 2-second Offer-Help Popover -->
+        <div id="ai-offer-popover" class="ai-offer-popover" role="status" aria-live="polite" hidden>
+          <div class="ai-offer-top">
+            <p class="ai-offer-text">Need help breaking down a task or planning your schedule?</p>
+            <button type="button" id="dismiss-ai-offer-btn" class="icon-btn" aria-label="Dismiss AI help offer">
+              <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M18 6 6 18" />
+                <path d="m6 6 12 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="ai-offer-actions">
+            <button type="button" id="accept-ai-offer-btn" class="btn btn-primary btn-xs">Open AI Helper</button>
+            <button type="button" id="decline-ai-offer-btn" class="btn-text">No thanks</button>
+          </div>
+        </div>
+
+        <button type="button" id="ai-floating-btn" class="ai-floating-btn">
+          <svg class="icon-sm icon-sky" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          Ask AI Helper
+        </button>
+      </div>
+    </div>
+
+    <script type="module" src="/src/js/main.js"></script>
   </body>
 </html>
-

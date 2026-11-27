@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-Task Manager is a local-first To-Do and productivity management web application. All task management data (titles, descriptions, classifications, due dates/times, completion states, and Recycle Bin items) is persisted locally in the browser (`localStorage`) and is **never transmitted to external services**.
+Task Manager is a local-first To-Do and productivity management web application built with **HTML**, **CSS**, and **Vanilla JavaScript** (`index.html`, `src/styles/main.css`, and `src/js/*`). All task management data (titles, descriptions, classifications, due dates/times, completion states, and Recycle Bin items) is persisted locally in the browser (`localStorage`) under `taskledger_workspace_v1`, with optional anonymous-auth cloud sync when Supabase environment variables are configured.
 
 ## 2. Backend API Reference (`server.ts`)
 
@@ -32,21 +32,15 @@ Returns `{ "ok": true }` for server readiness checks.
 
 ---
 
-## 3. Frontend Internal Modules (`src/`)
+## 3. Frontend Modules (HTML, CSS & Vanilla JavaScript)
 
-| Module | Responsibility | Key Exports |
+| File | Responsibility | Key Exports / Sections |
 | :--- | :--- | :--- |
-| `src/types/task.ts` | Domain TypeScript contracts | `Task`, `RecycledTask`, `TaskFilterState`, `TaskMetrics`, `SaveNotification`, `AiChatMessage` |
-| `src/utils/storage.ts` | Local browser persistence & schema validation | `STORAGE_KEY`, `loadWorkspaceState`, `saveWorkspaceState` |
-| `src/utils/taskHelpers.ts` | Pure business logic for validation, filtering, metrics, and formatting | `findDuplicateTask`, `filterTasks`, `calculateTaskMetrics`, `isTaskOverdue`, `formatDueSchedule` |
-| `src/services/aiHelperService.ts` | Fetch client for `/api/ai-helper` with 15s timeout & error parsing | `requestAiHelp` |
-| `src/components/Header.tsx` | Top navigation bar (Tasks, Recycle Bin, Module Docs, Privacy, AI Helper) | `Header` |
-| `src/components/StatsStrip.tsx` | 4-column summary metrics & progress bar | `StatsStrip` |
-| `src/components/AddTaskForm.tsx` | Main-screen task & classification creation form | `AddTaskForm` |
-| `src/components/TaskFilters.tsx` | 5-mode filter bar + Clear Completed trigger | `TaskFilters` |
-| `src/components/TaskItem.tsx` | Task row with completion toggle, progress %, inline edit, and soft delete | `TaskItem` |
-| `src/components/TaskList.tsx` | Task list container with empty/filtered states | `TaskList` |
-| `src/components/RecycleBinView.tsx` | Soft-deleted task recovery & single/multi-select permanent deletion | `RecycleBinView` |
-| `src/components/ConfirmDialog.tsx` | Accessible in-app confirmation modal | `ConfirmDialog` |
-| `src/components/AiHelperChatbox.tsx` | 2-second non-blocking help prompt & AI chat drawer | `AiHelperChatbox` |
-| `src/components/DocsModal.tsx` | In-app module & privacy documentation modal | `DocsModal` |
+| `index.html` | Semantic HTML5 application structure | Header, stats strip, 5-mode filter bar, task list, Recycle Bin, modals, AI Helper dock |
+| `src/styles/main.css` | Pure CSS styling & responsive layout | Custom properties, Grid/Flexbox layouts, color swatches, modal & mobile breakpoints |
+| `src/js/constants.js` | Configuration & safe SVG builder | `STORAGE_KEY`, `DEFAULT_CLASSIFICATIONS`, `CLASSIFICATION_COLOR_OPTIONS`, `createSvgIcon` |
+| `src/js/storage.js` | Browser persistence, schema normalization & optional Supabase sync | `loadWorkspaceState`, `saveWorkspaceState`, `normalizeWorkspaceState` |
+| `src/js/taskHelpers.js` | Pure domain logic for validation, urgency sorting, filtering & formatting | `findDuplicateTask`, `filterTasks`, `sortTasksForDisplay`, `calculateTaskMetrics`, `isTaskOverdue` |
+| `src/js/renderers.js` | Safe DOM rendering via `createElement` and `textContent` | `renderStatsStrip`, `renderFilterBar`, `renderTaskList`, `renderRecycleBin`, `renderAiChat` |
+| `src/js/aiHelperService.js` | Fetch client for `/api/ai-helper` with 15s timeout & error handling | `requestAiHelp` |
+| `src/js/main.js` | Main controller managing state, events, dialogs, banners, and AI chatbox | `init`, `commitWorkspace`, `renderApp` |
